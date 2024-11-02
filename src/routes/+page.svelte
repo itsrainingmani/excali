@@ -319,6 +319,7 @@
 	}
 
 	function clearState() {
+		ctx.setTransform(1, 0, 0, 1, 0, 0);
 		ctx.clearRect(0, 0, canvas.width, canvas.height);
 		objectStore = [];
 		// const t: ToastSettings = {
@@ -349,7 +350,7 @@
 <svelte:window onresize={resize} onkeydown={handleKeyboard} />
 
 <div
-	class="flex h-screen w-screen flex-col justify-between bg-zinc-50 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:16px_16px]"
+	class="flex h-[100vh] w-[100vw] flex-col justify-between bg-zinc-50 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:16px_16px]"
 >
 	<div class="flex flex-row justify-center gap-2 py-4">
 		<button
@@ -398,8 +399,8 @@
 			<span>Text</span>
 		</button>
 	</div>
-	{#if action === 'rect' || action === 'circle'}
-		<div class="max-w-30 card absolute left-4 top-10 translate-y-1/2 rounded bg-zinc-100 text-sm">
+	<div class="max-w-30 card absolute left-4 top-10 translate-y-1/2 rounded bg-zinc-100 text-sm">
+		{#if action === 'rect' || action === 'circle'}
 			<section class="p-4">
 				<div class="flex flex-row items-center justify-start gap-1">
 					<ColorWheel color="green" />
@@ -451,10 +452,8 @@
 				</div>
 				<SlideToggle size="sm" rounded="rounded" name="fill-toggle" bind:checked={fillPolygons} />
 			</section>
-		</div>
-	{/if}
-	{#if action === 'text'}
-		<div class="max-w-30 card absolute left-4 top-10 translate-y-1/2 rounded bg-zinc-100 text-sm">
+		{/if}
+		{#if action === 'text'}
 			<section class="p-4">
 				<div class="flex flex-row items-center justify-start gap-1">
 					<ColorWheel color="green" />
@@ -485,20 +484,20 @@
 					</div>
 				</RangeSlider>
 			</section>
-		</div>
-	{/if}
+		{/if}
+	</div>
 	<a class="absolute left-0 top-0 p-4 text-left text-xl italic underline" href="/">Excali 🏔️</a>
 	<canvas
 		bind:this={canvas}
 		id="canvas"
-		class="inset-0 h-full w-full cursor-pointer"
+		class="inset-0 h-full min-h-0 w-full cursor-pointer"
 		style="image-rendering: crisp-edges"
 		onmousedown={handleMouseDown}
 		onmousemove={handleMouseMove}
 		onmouseup={handleMouseUp}
 	>
 	</canvas>
-	<div class="flex flex-row justify-center gap-2 py-4">
+	<div class="flex shrink-0 flex-row justify-center gap-2 py-4">
 		<button class="variant-soft chip hover:variant-filled-error" onclick={clearState}>
 			<Eraser color="red" />
 			<span>Clear</span>
@@ -508,7 +507,7 @@
 			<span>Export</span>
 		</button>
 	</div>
-	<div class="absolute bottom-0 right-0 p-4">
+	<div class="absolute bottom-0 right-0 p-2">
 		<button
 			class="variant-glass btn-icon hover:variant-filled-tertiary"
 			onclick={() => {

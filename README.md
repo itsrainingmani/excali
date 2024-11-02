@@ -1,18 +1,25 @@
-# sv
+# Excali - Macro
 
-Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
+SvelteKit Application that mimics basic Excalidraw functionality. Written as an exercise to see how I could improve on my interview performance at Macro
 
-## Creating a project
+## Design Goals
 
-If you're seeing this, you've probably already done this step. Congrats!
+Based on the prompt, I decided to focus on a minimal yet functional subset of Excalidraw, namely the following features -
 
-```bash
-# create a new project in the current directory
-npx sv create
+- Panning
+- Rectangles
+- Circles (Ellipses)
+- Text
 
-# create a new project in my-app
-npx sv create my-app
-```
+I wanted to not just render lines on the canvas but figure out what idiomatic ways of working with the Canvas API are and how to work with them.
+
+To this end, the code does the following -
+
+- Proper state management of the global canvas object
+- In-memory store of any drawn objects (I wanted to make these persistent but left that for another day)
+- Multiple Parameters for rendered objects like - stroke color, line width, line style, font style etc.
+
+The codebase makes extensive use of SkeletonUI components which allows me to avoid getting too bogged down with generating functional UI but allows for heavy customizability
 
 ## Developing
 
