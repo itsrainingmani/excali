@@ -103,7 +103,7 @@
 
 			for (let obj of objectStore) {
 				ctx.strokeStyle = obj.stroke;
-				ctx.lineWidth = obj.linewidth;
+				ctx.lineWidth = obj.linewidth ?? 1;
 				ctx.setLineDash(getLineDash(obj.linetype));
 				ctx.fillStyle = obj.stroke;
 
@@ -217,6 +217,7 @@
 					x: prevX - viewportTransform.x,
 					y: prevY - viewportTransform.y,
 					width: ctx.measureText(text),
+					stroke: stroke,
 					timestamp: new Date(),
 					fontSettings: `${isTextBold ? 'bold' : ''} ${isTextItalic ? 'italic' : ''} ${fontSize}px sans-serif`,
 					shape: 'text'
@@ -275,9 +276,9 @@
 	}
 
 	function handleKeyboard(evt: KeyboardEvent) {
+		evt.preventDefault();
+		evt.stopPropagation();
 		if (action === 'text' && isDown === false) {
-			evt.preventDefault();
-			evt.stopPropagation();
 			writingText = true;
 			let key = evt.key;
 			if (evt.repeat) return;
@@ -303,6 +304,11 @@
 					curText.push(key);
 					break;
 			}
+		} else if (action !== 'text') {
+			// Basic Undo
+			if (evt.getModifierState('Control') && evt.key === 'z') {
+				objectStore.pop();
+			}
 		}
 	}
 
@@ -318,8 +324,19 @@
 	}
 
 	function exportCanvas() {
-		let dataURL = canvas.toDataURL('image/png').replace('image/png', 'image/octet-stream');
-		downloadImage(dataURL, 'excali.png');
+		let w = canvas.width;
+		let h = canvas.height;
+		let data = ctx.getImageData(0, 0, w, h);
+		const compositeOp = ctx.globalCompositeOperation;
+		ctx.globalCompositeOperation = 'destination-over';
+		ctx.fillStyle = 'white';
+		ctx.fillRect(0, 0, w, h);
+		const imgData = canvas.toDataURL('image/jpeg');
+		ctx.clearRect(0, 0, w, h);
+		ctx.putImageData(data, 0, 0);
+		ctx.globalCompositeOperation = compositeOp;
+
+		downloadImage(imgData, 'excali.jpeg');
 	}
 
 	function downloadImage(data: string, filename = 'excali-sketch.png') {
