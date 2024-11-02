@@ -1,105 +1,526 @@
 <script lang="ts">
-  import { browser } from '$app/environment';
+	import { getModalStore } from '@skeletonlabs/skeleton';
+	import { browser } from '$app/environment';
+	import { RangeSlider, SlideToggle } from '@skeletonlabs/skeleton';
+	import {
+		Hand,
+		Box,
+		Circle,
+		Eraser,
+		Image,
+		BorderSolid,
+		BorderDotted,
+		Text,
+		InfoCircled,
+		FontBold,
+		FontItalic,
+		FontSize,
+		ColorWheel,
+		Width,
+		BlendingMode,
+		Pencil1
+	} from 'svelte-radix';
+	import type { ModalSettings } from '@skeletonlabs/skeleton';
 
-  let canvas = null;
+	const modalStore = getModalStore();
 
-  let startX = 0;
-  let startY = 0;
-  let endX = 0;
-  let endY = 0;
+	let canvas: HTMLCanvasElement;
+	let ctx: CanvasRenderingContext2D;
 
-  let areWeDrawing = false;
+	let action = $state('rect');
+	let stroke = $state('black');
+	let lineWidth = $state(1);
+	let lineType = $state('dashed');
+	let fillPolygons = $state(false);
+	let isDown = $state(false);
 
-  interface Rectangle {
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-    timestamp: Date;
-  }
+	// Tracking Mouse Positions
+	let startX = $state(0);
+	let startY = $state(0);
+	let prevX = $state(0);
+	let prevY = $state(0);
+	let viewportTransform = $state({
+		x: 0,
+		y: 0,
+		scale: 1
+	});
 
-  // Only contains drawn rectangles
-  // {x: int, y: int, width: int, height: int, timestamp: current timestamp}
-  let objectStore: Rectangle[] = [];
-  function drawExistingObjects(ctx) {
-    if (browser) {
-      for (let obj of objectStore) {
-        ctx.strokeRect(obj.x, obj.y, obj.width, obj.height);
-      }
-    }
-  }
+	// For Text input
+	let curText: string[] = $state([]);
+	let writingText = $state(false);
+	let isTextBold = $state(false);
+	let isTextItalic = $state(false);
+	let fontSize = $state(40);
 
-  function getCurrentMousePosition(canvas, evt) {
-    var rect = canvas.getBoundingClientRect();
-    let x = (evt.clientX - rect.left) / (rect.right - rect.left) * canvas.width;
-    let y = (evt.clientY - rect.top) / (rect.bottom - rect.top) * canvas.height;
+	// Runs when the component is loaded and then when dependencies change
+	$effect(() => {
+		const canvasCtx = canvas.getContext('2d');
+		if (canvasCtx) {
+			ctx = canvasCtx;
+			ctx.canvas.width = window.innerWidth;
+			ctx.canvas.height = window.innerHeight;
+			ctx.clearRect(0, 0, canvas.width, canvas.height);
+			drawExistingObjects();
+		}
+	});
 
-    return {x: x, y: y};
-  }
+	function getLineDash(linetype: string) {
+		return linetype === 'dashed' ? [] : [4, 4];
+	}
 
-  function captureStartPos(evt) {
-    if (browser) {
-      let canvas = document.getElementById('canvas');
-      let mousePos = getCurrentMousePosition(canvas, evt);
-      console.log(mousePos.x, mousePos.y);
-      startX = mousePos.x;
-      startY = mousePos.y;
-      areWeDrawing = true;
-    }
-  }
+	function drawRect(startX: number, startY: number, w: number, h: number, fill: boolean = false) {
+		if (fill) {
+			ctx.fillRect(startX, startY, w, h);
+		} else {
+			ctx.strokeRect(startX, startY, w, h);
+		}
+	}
 
-  function drawRectangle(evt) {
-    if (browser) {
-      let canvas = document.getElementById('canvas');
-      let mousePos = getCurrentMousePosition(canvas, evt);
-      console.log(mousePos.x, mousePos.y);
-      endX = mousePos.x;
-      endY = mousePos.y;
+	function drawOval(startX: number, startY: number, x: number, y: number, fill = false) {
+		ctx.beginPath();
+		ctx.moveTo(startX, startY + (y - startY) / 2);
+		ctx.bezierCurveTo(startX, startY, x, startY, x, startY + (y - startY) / 2);
+		ctx.bezierCurveTo(x, y, startX, y, startX, startY + (y - startY) / 2);
+		ctx.closePath();
 
-      const ctx = canvas.getContext('2d');
-      ctx.lineWidth = 1;
+		if (fill) {
+			ctx.fill();
+		} else {
+			ctx.stroke();
+		}
+	}
 
-      let width = endX - startX;
-      let height = endY - startY;
+	let objectStore: any[] = $state([]);
 
-      if (areWeDrawing) {
-        ctx.strokeRect(startX, startY, width, height);
-      }
-    }
-  }
+	// Main render loop for objects that have been created previously
+	function drawExistingObjects() {
+		if (browser) {
+			// This bit of magic about ctx transforms is very powerful
+			// but I'm not super sure how to handle this properly
+			ctx.setTransform(1, 0, 0, 1, 0, 0);
+			ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  function finalizeObject(evt) {
-    if (browser) {
-      let canvas = document.getElementById('canvas');
-      let mousePos = getCurrentMousePosition(canvas, evt);
-      const ctx = canvas.getContext('2d');
-      ctx.lineWidth = 1;
-      console.log(mousePos.x, mousePos.y);
-      let width = endX - startX;
-      let height = endY - startY;
-      ctx.strokeRect(startX, startY, width, height);
+			// BUG - When this transform is set, the mouse position for any subsequent
+			// operation is slightly off
+			ctx.setTransform(
+				viewportTransform.scale,
+				0,
+				0,
+				viewportTransform.scale,
+				viewportTransform.x,
+				viewportTransform.y
+			);
+			for (let obj of objectStore) {
+				ctx.strokeStyle = obj.stroke;
+				ctx.lineWidth = obj.linewidth;
+				ctx.setLineDash(getLineDash(obj.linetype));
+				ctx.fillStyle = obj.stroke;
 
-      areWeDrawing = false;
-      let currentObject: Rectangle = {
-        x: startX,
-        y: startY,
-        width: endX - startX,
-        height: endY - startY,
-        timestamp: new Date(),
-      }
-      objectStore.push(currentObject);
-    }
-  }
+				// Sad that Svelte disallows some more powerful typescript lang features
+				// Would prefer to have this be more type checked esp like having an enum
+				// for object shape
+				switch (obj.shape) {
+					case 'rect':
+						drawRect(obj.x, obj.y, obj.width, obj.height, obj.fill);
+						break;
+					case 'circle':
+						drawOval(obj.startX, obj.startY, obj.x, obj.y, obj.fill);
+						break;
+					case 'text':
+						ctx.font = obj.fontSettings;
+						ctx.fillText(obj.text, obj.x, obj.y);
+					default:
+						break;
+				}
+			}
+		}
+	}
 
-  if (browser) {
-    canvas = document.getElementById('canvas');
-    console.log(canvas);
-    if (canvas) {
-      const ctx = canvas.getContext('2d');
-      drawExistingObjects(ctx);
-    }
-  }
+	function getCurrentMousePosition(evt: MouseEvent) {
+		var rect = canvas.getBoundingClientRect();
+		let x = ((evt.clientX - rect.left) / (rect.right - rect.left)) * canvas.width;
+		let y = ((evt.clientY - rect.top) / (rect.bottom - rect.top)) * canvas.height;
+
+		return { x: x, y: y };
+	}
+
+	function handleMouseDown(evt: MouseEvent) {
+		evt.preventDefault();
+		evt.stopPropagation();
+		if (browser) {
+			let mousePos = getCurrentMousePosition(evt);
+			console.log(`Mouse Down at: ${mousePos.x}, ${mousePos.y}`);
+			startX = mousePos.x;
+			startY = mousePos.y;
+			console.log(startX, startY);
+			if (action === 'rect' || action === 'circle') {
+				isDown = true;
+
+				// IMO: This looks pretty cool and is also what ExcaliDraw does
+				canvas.style.cursor = 'crosshair';
+			}
+			if (action === 'pan') {
+				isDown = true;
+				canvas.style.cursor = 'move';
+			}
+			if (action === 'text') {
+				canvas.style.cursor = 'text';
+			}
+		}
+	}
+
+	function handleMouseMove(evt: MouseEvent) {
+		evt.preventDefault();
+		evt.stopPropagation();
+		if (browser) {
+			let mousePos = getCurrentMousePosition(evt);
+			console.log(`Mouse moved to: ${mousePos.x}, ${mousePos.y}`);
+			drawExistingObjects();
+			ctx.strokeStyle = stroke;
+			ctx.lineWidth = lineWidth;
+			ctx.setLineDash(getLineDash(lineType));
+			ctx.fillStyle = stroke;
+			if (action === 'rect' && isDown) {
+				let width = prevX - startX;
+				let height = prevY - startY;
+				if (fillPolygons) {
+					ctx.fillRect(startX, startY, width, height);
+				} else {
+					ctx.strokeRect(startX, startY, width, height);
+				}
+			} else if (action === 'circle' && isDown) {
+				drawOval(startX, startY, mousePos.x, mousePos.y, fillPolygons);
+			} else if (action === 'pan' && isDown) {
+				viewportTransform.x += mousePos.x - prevX;
+				viewportTransform.y += mousePos.y - prevY;
+			} else if (action === 'text') {
+				if (curText.length > 0 && writingText) {
+					ctx.font = `${fontSize}px ${isTextBold ? 'bold' : ''} ${isTextItalic ? 'italic' : ''} sans-serif`;
+					let text = curText.join('');
+					ctx.fillText(text, prevX, prevY);
+					let currentObject = {
+						text: text,
+						x: prevX,
+						y: prevY,
+						width: ctx.measureText(text),
+						timestamp: new Date(),
+						fontSettings: `${isTextBold ? 'bold' : ''} ${isTextItalic ? 'italic' : ''} ${fontSize}px sans-serif`,
+						shape: 'text'
+					};
+					objectStore.push(currentObject);
+					writingText = false;
+					curText = [];
+				}
+			}
+			prevX = mousePos.x;
+			prevY = mousePos.y;
+		}
+	}
+
+	function handleMouseUp(evt: MouseEvent) {
+		evt.preventDefault();
+		evt.stopPropagation();
+		if (browser) {
+			let mousePos = getCurrentMousePosition(evt);
+			console.log(`Mouse Up at: ${mousePos.x}, ${mousePos.y}`);
+			prevX = mousePos.x;
+			prevY = mousePos.y;
+			ctx.strokeStyle = stroke;
+			ctx.fillStyle = stroke;
+			ctx.lineWidth = lineWidth;
+			ctx.setLineDash(getLineDash(lineType));
+			if (action === 'rect' && isDown) {
+				let width = prevX - startX;
+				let height = prevY - startY;
+				if (fillPolygons) {
+					ctx.fillRect(startX, startY, width, height);
+				} else {
+					ctx.strokeRect(startX, startY, width, height);
+				}
+				let currentObject = {
+					x: startX,
+					y: startY,
+					width: prevX - startX,
+					height: prevY - startY,
+					timestamp: new Date(),
+					stroke: stroke,
+					linewidth: lineWidth,
+					linetype: lineType,
+					fill: fillPolygons,
+					shape: 'rect'
+				};
+				objectStore.push(currentObject);
+			} else if (action === 'circle' && isDown) {
+				drawOval(startX, startY, mousePos.x, mousePos.y, fillPolygons);
+				let currentObject = {
+					startX: startX,
+					startY: startY,
+					x: prevX,
+					y: prevY,
+					timestamp: new Date(),
+					stroke: stroke,
+					linewidth: lineWidth,
+					linetype: lineType,
+					fill: fillPolygons,
+					shape: 'circle'
+				};
+				objectStore.push(currentObject);
+			}
+			canvas.style.cursor = 'pointer';
+			isDown = false;
+		}
+	}
+
+	function handleKeyboard(evt: KeyboardEvent) {
+		if (action === 'text') {
+			evt.preventDefault();
+			evt.stopPropagation();
+			writingText = true;
+			let key = evt.key;
+			console.log(key);
+			if (evt.repeat) return;
+
+			switch (evt.key) {
+				case 'Backspace':
+					curText.pop();
+					if (curText.length > 0) {
+						drawExistingObjects();
+						let fontSettings = `${isTextBold ? 'bold' : ''} ${isTextItalic ? 'italic' : ''} ${fontSize}px sans-serif`;
+						fontSettings.trimStart();
+						ctx.font = fontSettings;
+						ctx.fillText(curText.join(''), prevX, prevY);
+					}
+					break;
+				case 'Enter':
+				case 'Shift':
+				case 'Control':
+				case 'Alt':
+				case 'Escape':
+				case 'Meta':
+					break;
+
+				default:
+					curText.push(key);
+					break;
+			}
+
+			drawExistingObjects();
+			let fontSettings = `${isTextBold ? 'bold' : ''} ${isTextItalic ? 'italic' : ''} ${fontSize}px sans-serif`;
+			fontSettings.trimStart();
+			ctx.font = fontSettings;
+			ctx.fillText(curText.join(''), prevX, prevY);
+		}
+	}
+
+	function resize() {
+		ctx.canvas.width = window.innerWidth;
+		ctx.canvas.height = window.innerHeight;
+		drawExistingObjects();
+	}
+
+	function clearState() {
+		ctx.clearRect(0, 0, canvas.width, canvas.height);
+		objectStore = [];
+		// const t: ToastSettings = {
+		// 	message: 'Canvas Cleared!'
+		// };
+		// toastStore.trigger(t);
+	}
+
+	function exportCanvas() {
+		let dataURL = canvas.toDataURL('image/png').replace('image/png', 'image/octet-stream');
+		downloadImage(dataURL, 'excali.png');
+		// const t: ToastSettings = {
+		// 	message: 'Exported as excali-sketch.png'
+		// };
+		// toastStore.trigger(t);
+	}
+
+	function downloadImage(data: string, filename = 'excali-sketch.png') {
+		let a = document.createElement('a');
+		a.href = data;
+		a.download = filename;
+		document.body.appendChild(a);
+		a.click();
+		document.body.removeChild(a);
+	}
 </script>
 
-<canvas id="canvas" class="w-full h-full" on:mousedown={captureStartPos} on:mousemove={drawRectangle} on:mouseup={finalizeObject}>
-</canvas>
+<svelte:window onresize={resize} onkeydown={handleKeyboard} />
+
+<div
+	class="flex h-screen w-screen flex-col justify-between bg-zinc-50 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:16px_16px]"
+>
+	<div class="flex flex-row justify-center gap-2 py-4">
+		<button
+			class="{action === 'pan'
+				? 'variant-ghost-success font-semibold'
+				: 'variant-soft'} chip hover:variant-ghost-success"
+			onclick={() => {
+				action = 'pan';
+			}}
+		>
+			<Hand />
+			<span>Pan</span>
+		</button>
+		<button
+			class="{action === 'rect'
+				? 'variant-ghost-success font-semibold'
+				: 'variant-soft'} chip hover:variant-ghost-success"
+			onclick={() => {
+				action = 'rect';
+			}}
+		>
+			<Box />
+			<span>Rect</span>
+		</button>
+		<button
+			class="{action === 'circle'
+				? 'variant-ghost-success font-semibold'
+				: 'variant-soft'} chip hover:variant-ghost-success"
+			onclick={() => {
+				action = 'circle';
+			}}
+		>
+			<Circle />
+			<span>Circle</span>
+		</button>
+		<button
+			class="{action === 'text'
+				? 'variant-ghost-success font-semibold'
+				: 'variant-soft'} chip hover:variant-ghost-success"
+			onclick={() => {
+				action = 'text';
+				canvas.style.cursor = 'text';
+			}}
+		>
+			<Text />
+			<span>Text</span>
+		</button>
+	</div>
+	{#if action === 'rect' || action === 'circle'}
+		<div class="max-w-30 card absolute left-4 top-10 translate-y-1/2 rounded bg-zinc-100 text-sm">
+			<section class="p-4">
+				<div class="flex flex-row items-center justify-start gap-1">
+					<ColorWheel color="green" />
+					<h3>Color</h3>
+				</div>
+				<input type="color" bind:value={stroke} />
+			</section>
+			<section class="p-4">
+				<RangeSlider name="linewidth-slider" bind:value={lineWidth} max={5} min={1} step={1} ticked>
+					<div class="flex items-center justify-between">
+						<Width color="magenta" />
+						<div>Line Width</div>
+						<div class="text-xs">{lineWidth}</div>
+					</div>
+				</RangeSlider>
+			</section>
+			<section class="p-4">
+				<div class="flex flex-row items-center justify-start gap-1">
+					<Pencil1 color="black" />
+					<h3 class="italic">Line Type</h3>
+				</div>
+				<div class="flex flex-row gap-1 py-1">
+					<button
+						class="{lineType === 'dashed'
+							? 'variant-ghost-success font-semibold'
+							: 'variant-soft'} chip hover:variant-ghost-success"
+						onclick={() => {
+							lineType = 'dashed';
+						}}
+					>
+						<BorderSolid />
+					</button>
+					<button
+						class="{lineType === 'dotted'
+							? 'variant-ghost-success font-semibold'
+							: 'variant-soft'} chip hover:variant-ghost-success"
+						onclick={() => {
+							lineType = 'dotted';
+						}}
+					>
+						<BorderDotted />
+					</button>
+				</div>
+			</section>
+			<section class="p-4">
+				<div class="flex flex-row items-center justify-start gap-1">
+					<BlendingMode color="brown" />
+					<h3 class="italic">Fill</h3>
+				</div>
+				<SlideToggle size="sm" rounded="rounded" name="fill-toggle" bind:checked={fillPolygons} />
+			</section>
+		</div>
+	{/if}
+	{#if action === 'text'}
+		<div class="max-w-30 card absolute left-4 top-10 translate-y-1/2 rounded bg-zinc-100 text-sm">
+			<section class="p-4">
+				<div class="flex flex-row items-center justify-start gap-1">
+					<ColorWheel color="green" />
+					<h3>Color</h3>
+				</div>
+				<input type="color" bind:value={stroke} />
+			</section>
+			<section class="p-4">
+				<div class="flex flex-row items-center justify-start gap-1">
+					<FontBold color="red" />
+					<h3 class="font-semibold">Bold</h3>
+				</div>
+				<SlideToggle size="sm" rounded="rounded" name="bold-slide" bind:checked={isTextBold} />
+			</section>
+			<section class="p-4">
+				<div class="flex flex-row items-center justify-start gap-1">
+					<FontItalic color="purple" />
+					<h3 class="italic">Italic</h3>
+				</div>
+				<SlideToggle size="sm" rounded="rounded" name="italic-slide" bind:checked={isTextItalic} />
+			</section>
+			<section class="p-4">
+				<RangeSlider name="fontsize-slider" bind:value={fontSize} max={80} min={32} step={4} ticked>
+					<div class="flex items-center justify-between">
+						<FontSize color="blue" />
+						<div class="font-bold">Font Size</div>
+						<div class="text-xs">{fontSize}</div>
+					</div>
+				</RangeSlider>
+			</section>
+		</div>
+	{/if}
+	<a class="absolute left-0 top-0 p-4 text-left text-xl italic underline" href="/">Excali 🏔️</a>
+	<canvas
+		bind:this={canvas}
+		id="canvas"
+		class="inset-0 h-full w-full cursor-pointer"
+		style="image-rendering: crisp-edges"
+		onmousedown={handleMouseDown}
+		onmousemove={handleMouseMove}
+		onmouseup={handleMouseUp}
+	>
+	</canvas>
+	<div class="flex flex-row justify-center gap-2 py-4">
+		<button class="variant-soft chip hover:variant-filled-error" onclick={clearState}>
+			<Eraser color="red" />
+			<span>Clear</span>
+		</button>
+		<button class="variant-soft chip hover:variant-filled-tertiary" onclick={exportCanvas}>
+			<Image color="blue" />
+			<span>Export</span>
+		</button>
+	</div>
+	<div class="absolute bottom-0 right-0 p-4">
+		<button
+			class="variant-glass btn-icon hover:variant-filled-tertiary"
+			onclick={() => {
+				const modal: ModalSettings = {
+					type: 'alert',
+					title: 'Hey There!',
+					body: "I wanted to show that I was capable of building the prompt out given a little more time. I'm using SkeletonUI and Radix Icons for some extra visual flair. Any functionality that you see on the page should work! Hope you like it :)"
+				};
+				modalStore.trigger(modal);
+			}}
+		>
+			<InfoCircled />
+		</button>
+	</div>
+</div>
