@@ -60,7 +60,9 @@
 			ctx.canvas.width = window.innerWidth;
 			ctx.canvas.height = window.innerHeight;
 			ctx.clearRect(0, 0, canvas.width, canvas.height);
-			drawExistingObjects();
+			// drawExistingObjects();
+
+			requestAnimationFrame(drawExistingObjects);
 		}
 	});
 
@@ -95,21 +97,10 @@
 	// Main render loop for objects that have been created previously
 	function drawExistingObjects() {
 		if (browser) {
-			// This bit of magic about ctx transforms is very powerful
-			// but I'm not super sure how to handle this properly
 			ctx.setTransform(1, 0, 0, 1, 0, 0);
 			ctx.clearRect(0, 0, canvas.width, canvas.height);
+			ctx.translate(viewportTransform.x, viewportTransform.y);
 
-			// BUG - When this transform is set, the mouse position for any subsequent
-			// operation is slightly off
-			ctx.setTransform(
-				viewportTransform.scale,
-				0,
-				0,
-				viewportTransform.scale,
-				viewportTransform.x,
-				viewportTransform.y
-			);
 			for (let obj of objectStore) {
 				ctx.strokeStyle = obj.stroke;
 				ctx.lineWidth = obj.linewidth;
@@ -133,6 +124,34 @@
 						break;
 				}
 			}
+
+			setCanvasDrawingStyles();
+			if (action === 'rect' && isDown) {
+				let width = prevX - startX;
+				let height = prevY - startY;
+				console.log(`Rect dims: ${startX},${startY},${width},${height}`);
+				if (fillPolygons) {
+					ctx.fillRect(startX - viewportTransform.x, startY - viewportTransform.y, width, height);
+				} else {
+					ctx.strokeRect(startX - viewportTransform.x, startY - viewportTransform.y, width, height);
+				}
+			} else if (action === 'circle' && isDown) {
+				drawOval(
+					startX - viewportTransform.x,
+					startY - viewportTransform.y,
+					prevX - viewportTransform.x,
+					prevY - viewportTransform.y,
+					fillPolygons
+				);
+			}
+			if (action === 'text' && isDown === false) {
+				if (curText.length > 0 && writingText) {
+					ctx.font = `${isTextBold ? 'bold' : ''} ${isTextItalic ? 'italic' : ''} ${fontSize}px sans-serif`;
+					let text = curText.join('');
+					ctx.fillText(text, prevX - viewportTransform.x, prevY - viewportTransform.y);
+				}
+			}
+			requestAnimationFrame(drawExistingObjects);
 		}
 	}
 
@@ -144,12 +163,21 @@
 		return { x: x, y: y };
 	}
 
+	function setCanvasDrawingStyles() {
+		ctx.strokeStyle = stroke;
+		ctx.fillStyle = stroke;
+		ctx.lineWidth = lineWidth;
+		ctx.setLineDash(getLineDash(lineType));
+	}
+
+	// requestAnimationFrame(drawExistingObjects);
+
 	function handleMouseDown(evt: MouseEvent) {
 		evt.preventDefault();
 		evt.stopPropagation();
 		if (browser) {
 			let mousePos = getCurrentMousePosition(evt);
-			console.log(`Mouse Down at: ${mousePos.x}, ${mousePos.y}`);
+			// console.log(`Mouse Down at: ${mousePos.x}, ${mousePos.y}`);
 			startX = mousePos.x;
 			startY = mousePos.y;
 			console.log(startX, startY);
@@ -174,44 +202,30 @@
 		evt.stopPropagation();
 		if (browser) {
 			let mousePos = getCurrentMousePosition(evt);
-			console.log(`Mouse moved to: ${mousePos.x}, ${mousePos.y}`);
-			drawExistingObjects();
-			ctx.strokeStyle = stroke;
-			ctx.lineWidth = lineWidth;
-			ctx.setLineDash(getLineDash(lineType));
-			ctx.fillStyle = stroke;
-			if (action === 'rect' && isDown) {
-				let width = prevX - startX;
-				let height = prevY - startY;
-				if (fillPolygons) {
-					ctx.fillRect(startX, startY, width, height);
-				} else {
-					ctx.strokeRect(startX, startY, width, height);
-				}
-			} else if (action === 'circle' && isDown) {
-				drawOval(startX, startY, mousePos.x, mousePos.y, fillPolygons);
-			} else if (action === 'pan' && isDown) {
+			// drawExistingObjects();
+			// Set Current Canvas Context Styles
+			setCanvasDrawingStyles();
+
+			if (action === 'pan' && isDown) {
 				viewportTransform.x += mousePos.x - prevX;
 				viewportTransform.y += mousePos.y - prevY;
-			} else if (action === 'text') {
-				if (curText.length > 0 && writingText) {
-					ctx.font = `${fontSize}px ${isTextBold ? 'bold' : ''} ${isTextItalic ? 'italic' : ''} sans-serif`;
-					let text = curText.join('');
-					ctx.fillText(text, prevX, prevY);
-					let currentObject = {
-						text: text,
-						x: prevX,
-						y: prevY,
-						width: ctx.measureText(text),
-						timestamp: new Date(),
-						fontSettings: `${isTextBold ? 'bold' : ''} ${isTextItalic ? 'italic' : ''} ${fontSize}px sans-serif`,
-						shape: 'text'
-					};
-					objectStore.push(currentObject);
-					writingText = false;
-					curText = [];
-				}
 			}
+			if (action === 'text') {
+				let text = curText.join('');
+				let currentObject = {
+					text: text,
+					x: prevX - viewportTransform.x,
+					y: prevY - viewportTransform.y,
+					width: ctx.measureText(text),
+					timestamp: new Date(),
+					fontSettings: `${isTextBold ? 'bold' : ''} ${isTextItalic ? 'italic' : ''} ${fontSize}px sans-serif`,
+					shape: 'text'
+				};
+				objectStore.push(currentObject);
+				writingText = false;
+				curText = [];
+			}
+
 			prevX = mousePos.x;
 			prevY = mousePos.y;
 		}
@@ -225,21 +239,11 @@
 			console.log(`Mouse Up at: ${mousePos.x}, ${mousePos.y}`);
 			prevX = mousePos.x;
 			prevY = mousePos.y;
-			ctx.strokeStyle = stroke;
-			ctx.fillStyle = stroke;
-			ctx.lineWidth = lineWidth;
-			ctx.setLineDash(getLineDash(lineType));
+
 			if (action === 'rect' && isDown) {
-				let width = prevX - startX;
-				let height = prevY - startY;
-				if (fillPolygons) {
-					ctx.fillRect(startX, startY, width, height);
-				} else {
-					ctx.strokeRect(startX, startY, width, height);
-				}
 				let currentObject = {
-					x: startX,
-					y: startY,
+					x: startX - viewportTransform.x,
+					y: startY - viewportTransform.y,
 					width: prevX - startX,
 					height: prevY - startY,
 					timestamp: new Date(),
@@ -251,12 +255,11 @@
 				};
 				objectStore.push(currentObject);
 			} else if (action === 'circle' && isDown) {
-				drawOval(startX, startY, mousePos.x, mousePos.y, fillPolygons);
 				let currentObject = {
-					startX: startX,
-					startY: startY,
-					x: prevX,
-					y: prevY,
+					startX: startX - viewportTransform.x,
+					startY: startY - viewportTransform.y,
+					x: prevX - viewportTransform.x,
+					y: prevY - viewportTransform.y,
 					timestamp: new Date(),
 					stroke: stroke,
 					linewidth: lineWidth,
@@ -272,23 +275,20 @@
 	}
 
 	function handleKeyboard(evt: KeyboardEvent) {
-		if (action === 'text') {
+		if (action === 'text' && isDown === false) {
 			evt.preventDefault();
 			evt.stopPropagation();
 			writingText = true;
 			let key = evt.key;
-			console.log(key);
 			if (evt.repeat) return;
 
 			switch (evt.key) {
 				case 'Backspace':
-					curText.pop();
 					if (curText.length > 0) {
-						drawExistingObjects();
-						let fontSettings = `${isTextBold ? 'bold' : ''} ${isTextItalic ? 'italic' : ''} ${fontSize}px sans-serif`;
-						fontSettings.trimStart();
-						ctx.font = fontSettings;
-						ctx.fillText(curText.join(''), prevX, prevY);
+						curText.pop();
+					}
+					if (curText.length === 0) {
+						writingText = false;
 					}
 					break;
 				case 'Enter':
@@ -303,38 +303,23 @@
 					curText.push(key);
 					break;
 			}
-
-			drawExistingObjects();
-			let fontSettings = `${isTextBold ? 'bold' : ''} ${isTextItalic ? 'italic' : ''} ${fontSize}px sans-serif`;
-			fontSettings.trimStart();
-			ctx.font = fontSettings;
-			ctx.fillText(curText.join(''), prevX, prevY);
 		}
 	}
 
 	function resize() {
 		ctx.canvas.width = window.innerWidth;
 		ctx.canvas.height = window.innerHeight;
-		drawExistingObjects();
 	}
 
 	function clearState() {
 		ctx.setTransform(1, 0, 0, 1, 0, 0);
 		ctx.clearRect(0, 0, canvas.width, canvas.height);
 		objectStore = [];
-		// const t: ToastSettings = {
-		// 	message: 'Canvas Cleared!'
-		// };
-		// toastStore.trigger(t);
 	}
 
 	function exportCanvas() {
 		let dataURL = canvas.toDataURL('image/png').replace('image/png', 'image/octet-stream');
 		downloadImage(dataURL, 'excali.png');
-		// const t: ToastSettings = {
-		// 	message: 'Exported as excali-sketch.png'
-		// };
-		// toastStore.trigger(t);
 	}
 
 	function downloadImage(data: string, filename = 'excali-sketch.png') {
