@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { getModalStore } from '@skeletonlabs/skeleton';
 	import { browser } from '$app/environment';
-	import { RangeSlider, SlideToggle } from '@skeletonlabs/skeleton';
+	import { RangeSlider, SlideToggle, popup } from '@skeletonlabs/skeleton';
 	import {
 		Hand,
 		Box,
@@ -18,9 +18,11 @@
 		ColorWheel,
 		Width,
 		BlendingMode,
-		Pencil1
+		Pencil1,
+		MagicWand,
+		PaperPlane
 	} from 'svelte-radix';
-	import type { ModalSettings } from '@skeletonlabs/skeleton';
+	import type { ModalSettings, PopupSettings } from '@skeletonlabs/skeleton';
 
 	const modalStore = getModalStore();
 
@@ -51,6 +53,10 @@
 	let isTextBold = $state(false);
 	let isTextItalic = $state(false);
 	let fontSize = $state(40);
+
+	// For AI Generation Prompt
+	let aiPrompt = $state('');
+	let generatingAI = $state(false);
 
 	// Runs when the component is loaded and then when dependencies change
 	$effect(() => {
@@ -120,6 +126,7 @@
 					case 'text':
 						ctx.font = obj.fontSettings;
 						ctx.fillText(obj.text, obj.x, obj.y);
+						break;
 					default:
 						break;
 				}
@@ -276,9 +283,9 @@
 	}
 
 	function handleKeyboard(evt: KeyboardEvent) {
-		evt.preventDefault();
-		evt.stopPropagation();
 		if (action === 'text' && isDown === false) {
+			evt.preventDefault();
+			evt.stopPropagation();
 			writingText = true;
 			let key = evt.key;
 			if (evt.repeat) return;
@@ -347,6 +354,39 @@
 		a.click();
 		document.body.removeChild(a);
 	}
+
+	const popupClick: PopupSettings = {
+		event: 'click',
+		target: 'popupClick',
+		placement: 'bottom'
+	};
+
+	async function handlePrompt() {
+		if (aiPrompt.length > 0) {
+			generatingAI = true;
+
+			const response = await fetch('/api/generateObjects', {
+				method: 'POST',
+				body: JSON.stringify({ prompt: aiPrompt }),
+				headers: {
+					'content-type': 'application/json'
+				}
+			});
+
+			if (!response.ok) {
+				console.log('Unable to generate AI Objects');
+				generatingAI = false;
+				aiPrompt = '';
+				return;
+			}
+
+			const data = await response.json();
+			console.log(data);
+
+			generatingAI = false;
+			aiPrompt = '';
+		}
+	}
 </script>
 
 <svelte:window onresize={resize} onkeydown={handleKeyboard} />
@@ -400,6 +440,38 @@
 			<Text />
 			<span>Text</span>
 		</button>
+		<button
+			class="{action === 'ai'
+				? 'variant-ghost-success font-semibold'
+				: 'variant-soft'} {generatingAI
+				? 'animate-pulse bg-gradient-to-r from-blue-500 to-purple-500'
+				: ''} chip hover:variant-ghost-success"
+			onclick={() => {
+				action = 'ai';
+				canvas.style.cursor = 'pointer';
+			}}
+			use:popup={popupClick}
+		>
+			<MagicWand />
+			<span>AI</span>
+		</button>
+	</div>
+	<div data-popup="popupClick" class="min-w-30 card variant-glass rounded p-2">
+		<textarea
+			placeholder="Describe your prompt..."
+			rows="3"
+			cols="35"
+			bind:value={aiPrompt}
+			class="input variant-soft mb-1 resize-none rounded bg-zinc-50 font-mono text-xs"
+		></textarea>
+		<button
+			class="variant-ringed-secondary chip font-semibold hover:variant-filled-tertiary active:variant-filled-success"
+			onclick={handlePrompt}
+		>
+			<span>Generate</span>
+			<PaperPlane color="blue" />
+		</button>
+		<div class="variant-glass arrow"></div>
 	</div>
 	<div class="max-w-30 card absolute left-4 top-10 translate-y-1/2 rounded bg-zinc-100 text-sm">
 		{#if action === 'rect' || action === 'circle'}
