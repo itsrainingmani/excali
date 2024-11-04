@@ -16,10 +16,16 @@ I wanted to not just render lines on the canvas but figure out what idiomatic wa
 To this end, the code does the following -
 
 - Proper state management of the global canvas object
-- In-memory store of any drawn objects (I wanted to make these persistent but left that for another day)
+- In-memory store of any drawn objects (doesn't persist across sessions) with Ctrl-Z (Undo) functionality.
 - Multiple Parameters for rendered objects like - stroke color, line width, line style, font style etc.
 
-The codebase makes extensive use of SkeletonUI components which allows me to avoid getting too bogged down with generating functional UI but allows for heavy customizability
+The codebase makes extensive use of SkeletonUI components which allows me to avoid getting too bogged down with generating functional UI but allows for heavy customizability.
+
+## AI Object Generation
+
+As a fun experiment, I'm using Claude to generate drawings based on a given prompt. Here's an example
+
+https://github.com/user-attachments/assets/4ff594ee-ae4d-4f45-b92f-d35f377779e7
 
 ## Developing
 
