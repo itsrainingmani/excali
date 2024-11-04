@@ -39,6 +39,7 @@
 		"vite": "^5.0.3"
 	},
 	"dependencies": {
+		"@anthropic-ai/sdk": "^0.31.0",
 		"@floating-ui/dom": "^1.6.12"
 	}
 }
