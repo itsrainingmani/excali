@@ -33,7 +33,7 @@
 	let stroke = $state('black');
 	let lineWidth = $state(1);
 	let lineType = $state('dashed');
-	let fillPolygons = $state(false);
+	let shouldFillPolygon = $state(false);
 	let isDown = $state(false);
 
 	// Tracking Mouse Positions
@@ -65,7 +65,9 @@
 			ctx = canvasCtx;
 			ctx.canvas.width = window.innerWidth;
 			ctx.canvas.height = window.innerHeight;
-			ctx.clearRect(0, 0, canvas.width, canvas.height);
+			console.log(ctx.canvas.width, ctx.canvas.height);
+			ctx.canvas.style.cursor = 'auto';
+			ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
 			// drawExistingObjects();
 
 			requestAnimationFrame(drawExistingObjects);
@@ -118,10 +120,10 @@
 				// for object shape
 				switch (obj.shape) {
 					case 'rect':
-						drawRect(obj.x, obj.y, obj.width, obj.height, obj.fill);
+						drawRect(obj.startX, obj.startY, obj.width, obj.height, obj.fill);
 						break;
 					case 'circle':
-						drawOval(obj.startX, obj.startY, obj.x, obj.y, obj.fill);
+						drawOval(obj.startX, obj.startY, obj.endX, obj.endY, obj.fill);
 						break;
 					case 'text':
 						ctx.font = obj.fontSettings;
@@ -137,7 +139,7 @@
 				let width = prevX - startX;
 				let height = prevY - startY;
 				console.log(`Rect dims: ${startX},${startY},${width},${height}`);
-				if (fillPolygons) {
+				if (shouldFillPolygon) {
 					ctx.fillRect(startX - viewportTransform.x, startY - viewportTransform.y, width, height);
 				} else {
 					ctx.strokeRect(startX - viewportTransform.x, startY - viewportTransform.y, width, height);
@@ -148,7 +150,7 @@
 					startY - viewportTransform.y,
 					prevX - viewportTransform.x,
 					prevY - viewportTransform.y,
-					fillPolygons
+					shouldFillPolygon
 				);
 			}
 			if (action === 'text' && isDown === false) {
@@ -250,34 +252,37 @@
 
 			if (action === 'rect' && isDown) {
 				let currentObject = {
-					x: startX - viewportTransform.x,
-					y: startY - viewportTransform.y,
+					startX: startX - viewportTransform.x,
+					startY: startY - viewportTransform.y,
 					width: prevX - startX,
 					height: prevY - startY,
 					timestamp: new Date(),
 					stroke: stroke,
 					linewidth: lineWidth,
 					linetype: lineType,
-					fill: fillPolygons,
+					fill: shouldFillPolygon,
 					shape: 'rect'
 				};
 				objectStore.push(currentObject);
+				canvas.style.cursor = 'auto';
 			} else if (action === 'circle' && isDown) {
 				let currentObject = {
 					startX: startX - viewportTransform.x,
 					startY: startY - viewportTransform.y,
-					x: prevX - viewportTransform.x,
-					y: prevY - viewportTransform.y,
+					endX: prevX - viewportTransform.x,
+					endY: prevY - viewportTransform.y,
 					timestamp: new Date(),
 					stroke: stroke,
 					linewidth: lineWidth,
 					linetype: lineType,
-					fill: fillPolygons,
+					fill: shouldFillPolygon,
 					shape: 'circle'
 				};
 				objectStore.push(currentObject);
+				canvas.style.cursor = 'auto';
+			} else if (action === 'pan' && isDown) {
+				canvas.style.cursor = 'pointer';
 			}
-			canvas.style.cursor = 'pointer';
 			isDown = false;
 		}
 	}
@@ -367,7 +372,11 @@
 
 			const response = await fetch('/api/generateObjects', {
 				method: 'POST',
-				body: JSON.stringify({ prompt: aiPrompt }),
+				body: JSON.stringify({
+					prompt: aiPrompt,
+					canvas_width: ctx.canvas.width,
+					canvas_height: ctx.canvas.height
+				}),
 				headers: {
 					'content-type': 'application/json'
 				}
@@ -382,6 +391,12 @@
 
 			const data = await response.json();
 			console.log(data);
+			const generated_objects = JSON.parse('[' + data[0].text);
+
+			for (let g of generated_objects) {
+				objectStore.push(g);
+			}
+			// objectStore.concat(generated_objects);
 
 			generatingAI = false;
 			aiPrompt = '';
@@ -401,6 +416,7 @@
 				: 'variant-soft'} chip hover:variant-ghost-success"
 			onclick={() => {
 				action = 'pan';
+				canvas.style.cursor = 'pointer';
 			}}
 		>
 			<Hand />
@@ -412,6 +428,7 @@
 				: 'variant-soft'} chip hover:variant-ghost-success"
 			onclick={() => {
 				action = 'rect';
+				canvas.style.cursor = 'auto';
 			}}
 		>
 			<Box />
@@ -423,6 +440,7 @@
 				: 'variant-soft'} chip hover:variant-ghost-success"
 			onclick={() => {
 				action = 'circle';
+				canvas.style.cursor = 'auto';
 			}}
 		>
 			<Circle />
@@ -524,7 +542,12 @@
 					<BlendingMode color="brown" />
 					<h3 class="italic">Fill</h3>
 				</div>
-				<SlideToggle size="sm" rounded="rounded" name="fill-toggle" bind:checked={fillPolygons} />
+				<SlideToggle
+					size="sm"
+					rounded="rounded"
+					name="fill-toggle"
+					bind:checked={shouldFillPolygon}
+				/>
 			</section>
 		{/if}
 		{#if action === 'text'}
