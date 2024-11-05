@@ -41,6 +41,9 @@
 	let shouldFillPolygon = $state(false);
 	let isDown = $state(false);
 
+	// Selected Object
+	let selectedShape = $state(null);
+
 	// Tracking Mouse Positions
 	let startX = $state(0);
 	let startY = $state(0);
@@ -160,6 +163,25 @@
 					default:
 						break;
 				}
+
+				if (selectedShape && obj === selectedShape) {
+					ctx.save();
+					ctx.strokeStyle = '#634795'; // Selection color
+					ctx.lineWidth = 1;
+
+					// Draw selection bounds
+					if (obj.shape === 'rect') {
+						ctx.strokeRect(obj.startX - 6, obj.startY - 6, obj.width + 12, obj.height + 12);
+					} else if (obj.shape === 'circle') {
+						ctx.strokeRect(
+							obj.startX - 4,
+							obj.startY - 4,
+							obj.endX - obj.startX + 8,
+							obj.endY - obj.startY + 8
+						);
+					}
+					ctx.restore();
+				}
 			}
 
 			setCanvasDrawingStyles();
@@ -203,6 +225,22 @@
 		return { x: x, y: y };
 	}
 
+	function isPointInShape(x: number, y: number, obj: any) {
+		switch (obj.shape) {
+			case 'rect':
+				return (
+					x >= obj.startX &&
+					x <= obj.startX + obj.width &&
+					y >= obj.startY &&
+					y <= obj.startY + obj.height
+				);
+			case 'circle':
+				return x >= obj.startX && x <= obj.endX && y >= obj.startY && y <= obj.endY;
+			default:
+				return false;
+		}
+	}
+
 	function setCanvasDrawingStyles() {
 		ctx.strokeStyle = stroke;
 		ctx.fillStyle = stroke;
@@ -217,6 +255,8 @@
 		evt.stopPropagation();
 		if (browser) {
 			let mousePos = getCurrentMousePosition(evt);
+			let x = mousePos.x - viewportTransform.x;
+			let y = mousePos.y - viewportTransform.y;
 			// console.log(`Mouse Down at: ${mousePos.x}, ${mousePos.y}`);
 			startX = mousePos.x;
 			startY = mousePos.y;
@@ -242,6 +282,8 @@
 		evt.stopPropagation();
 		if (browser) {
 			let mousePos = getCurrentMousePosition(evt);
+			let x = mousePos.x - viewportTransform.x;
+			let y = mousePos.y - viewportTransform.y;
 			// drawExistingObjects();
 			// Set Current Canvas Context Styles
 			setCanvasDrawingStyles();
@@ -249,6 +291,17 @@
 			if (action === 'pan' && isDown) {
 				viewportTransform.x += mousePos.x - prevX;
 				viewportTransform.y += mousePos.y - prevY;
+			}
+			if (action === 'select') {
+				for (let i = objectStore.length - 1; i >= 0; i--) {
+					if (isPointInShape(x, y, objectStore[i])) {
+						selectedShape = objectStore[i];
+						canvas.style.cursor = 'move';
+						return;
+					}
+				}
+				selectedShape = null;
+				canvas.style.cursor = 'auto';
 			}
 			if (action === 'text') {
 				let text = curText.join('');
