@@ -23,6 +23,7 @@
 		PaperPlane
 	} from 'svelte-radix';
 	import type { ModalSettings, PopupSettings } from '@skeletonlabs/skeleton';
+	import { fade, slide } from 'svelte/transition';
 
 	const modalStore = getModalStore();
 
@@ -396,7 +397,6 @@
 			for (let g of generated_objects) {
 				objectStore.push(g);
 			}
-			// objectStore.concat(generated_objects);
 
 			generatingAI = false;
 			aiPrompt = '';
@@ -409,70 +409,78 @@
 <div
 	class="flex h-[100vh] w-[100vw] flex-col justify-between bg-zinc-50 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:16px_16px]"
 >
-	<div class="flex flex-row justify-center gap-2 py-4">
-		<button
-			class="{action === 'pan'
-				? 'variant-ghost-success font-semibold'
-				: 'variant-soft'} chip hover:variant-ghost-success"
-			onclick={() => {
-				action = 'pan';
-				canvas.style.cursor = 'pointer';
-			}}
-		>
-			<Hand />
-			<span>Pan</span>
-		</button>
-		<button
-			class="{action === 'rect'
-				? 'variant-ghost-success font-semibold'
-				: 'variant-soft'} chip hover:variant-ghost-success"
-			onclick={() => {
-				action = 'rect';
-				canvas.style.cursor = 'auto';
-			}}
-		>
-			<Box />
-			<span>Rect</span>
-		</button>
-		<button
-			class="{action === 'circle'
-				? 'variant-ghost-success font-semibold'
-				: 'variant-soft'} chip hover:variant-ghost-success"
-			onclick={() => {
-				action = 'circle';
-				canvas.style.cursor = 'auto';
-			}}
-		>
-			<Circle />
-			<span>Circle</span>
-		</button>
-		<button
-			class="{action === 'text'
-				? 'variant-ghost-success font-semibold'
-				: 'variant-soft'} chip hover:variant-ghost-success"
-			onclick={() => {
-				action = 'text';
-				canvas.style.cursor = 'text';
-			}}
-		>
-			<Text />
-			<span>Text</span>
-		</button>
-		<button
-			class="{action === 'ai'
-				? 'variant-ghost-success font-semibold'
-				: 'variant-soft'} {generatingAI
-				? 'animate-pulse bg-gradient-to-r from-blue-500 to-purple-500'
-				: ''} chip hover:variant-ghost-success"
-			onclick={() => {
-				action = 'ai';
-				canvas.style.cursor = 'pointer';
-			}}
-			use:popup={popupClick}
-		>
-			<MagicWand />
-			<span>AI</span>
-		</button>
+	<div class="flex flex-col justify-center">
+		<div class="flex flex-row justify-center gap-2 py-4">
+			<button
+				class="{action === 'pan'
+					? 'variant-ghost-success font-semibold'
+					: 'variant-soft'} chip hover:variant-ghost-success"
+				onclick={() => {
+					action = 'pan';
+					canvas.style.cursor = 'pointer';
+				}}
+			>
+				<Hand />
+				<span>Pan</span>
+			</button>
+			<button
+				class="{action === 'rect'
+					? 'variant-ghost-success font-semibold'
+					: 'variant-soft'} chip hover:variant-ghost-success"
+				onclick={() => {
+					action = 'rect';
+					canvas.style.cursor = 'auto';
+				}}
+			>
+				<Box />
+				<span>Rect</span>
+			</button>
+			<button
+				class="{action === 'circle'
+					? 'variant-ghost-success font-semibold'
+					: 'variant-soft'} chip hover:variant-ghost-success"
+				onclick={() => {
+					action = 'circle';
+					canvas.style.cursor = 'auto';
+				}}
+			>
+				<Circle />
+				<span>Circle</span>
+			</button>
+			<button
+				class="{action === 'text'
+					? 'variant-ghost-success font-semibold'
+					: 'variant-soft'} chip hover:variant-ghost-success"
+				onclick={() => {
+					action = 'text';
+					canvas.style.cursor = 'text';
+				}}
+			>
+				<Text />
+				<span>Text</span>
+			</button>
+			<button
+				class="{action === 'ai'
+					? 'variant-ghost-success font-semibold'
+					: 'variant-soft'} {generatingAI
+					? 'animate-pulse bg-gradient-to-r from-blue-500 to-purple-500'
+					: ''} chip hover:variant-ghost-success"
+				onclick={() => {
+					action = 'ai';
+					canvas.style.cursor = 'pointer';
+				}}
+				disabled={action === 'ai' && generatingAI}
+				use:popup={popupClick}
+			>
+				<MagicWand />
+				<span>AI</span>
+			</button>
+		</div>
+		{#if generatingAI && action === 'ai'}
+			<p class="max-w-xl animate-pulse self-center font-mono text-xs italic text-slate-500">
+				{aiPrompt}
+			</p>
+		{/if}
 	</div>
 	<div data-popup="popupClick" class="min-w-30 card variant-glass rounded p-2">
 		<textarea

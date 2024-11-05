@@ -44,7 +44,6 @@ export const POST: RequestHandler = async ({ request }) => {
 			]
 		});
 
-		console.log(msg);
 		return json(msg.content);
 	} catch (error) {
 		// if (error instanceof Anthropic.APIError) {
