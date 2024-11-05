@@ -42,7 +42,7 @@
 	let isDown = $state(false);
 
 	// Selected Object
-	let selectedShape = $state(null);
+	let selectedShape: any = $state(null);
 
 	// Tracking Mouse Positions
 	let startX = $state(0);
@@ -79,6 +79,16 @@
 			// drawExistingObjects();
 
 			requestAnimationFrame(drawExistingObjects);
+		}
+	});
+
+	$effect(() => {
+		if (selectedShape) {
+			selectedShape.stroke = stroke;
+			selectedShape.linewidth = lineWidth;
+			selectedShape.linetype = lineType;
+			selectedShape.borderradius = borderRadius;
+			selectedShape.fill = shouldFillPolygon;
 		}
 	});
 
@@ -168,6 +178,7 @@
 					ctx.save();
 					ctx.strokeStyle = '#634795'; // Selection color
 					ctx.lineWidth = 1;
+					ctx.setLineDash([0, 0]);
 
 					// Draw selection bounds
 					if (obj.shape === 'rect') {
@@ -271,6 +282,27 @@
 				isDown = true;
 				canvas.style.cursor = 'move';
 			}
+			if (action === 'select') {
+				for (let i = objectStore.length - 1; i >= 0; i--) {
+					if (isPointInShape(x, y, objectStore[i])) {
+						selectedShape = objectStore[i];
+						canvas.style.cursor = 'move';
+
+						// Set the Shape Modifier values
+						if (selectedShape) {
+							stroke = selectedShape.stroke;
+							lineWidth = selectedShape.linewidth;
+							lineType = selectedShape.linetype;
+							shouldFillPolygon = selectedShape.fill;
+							borderRadius = selectedShape.borderradius;
+						}
+
+						return;
+					}
+				}
+				selectedShape = null;
+				canvas.style.cursor = 'auto';
+			}
 			if (action === 'text') {
 				canvas.style.cursor = 'text';
 			}
@@ -295,14 +327,14 @@
 			if (action === 'select') {
 				for (let i = objectStore.length - 1; i >= 0; i--) {
 					if (isPointInShape(x, y, objectStore[i])) {
-						selectedShape = objectStore[i];
 						canvas.style.cursor = 'move';
+
 						return;
 					}
 				}
-				selectedShape = null;
 				canvas.style.cursor = 'auto';
 			}
+
 			if (action === 'text') {
 				let text = curText.join('');
 				let currentObject = {
@@ -502,6 +534,7 @@
 				onclick={() => {
 					action = 'pan';
 					canvas.style.cursor = 'pointer';
+					selectedShape = null;
 				}}
 			>
 				<Hand />
@@ -526,6 +559,7 @@
 				onclick={() => {
 					action = 'rect';
 					canvas.style.cursor = 'auto';
+					selectedShape = null;
 				}}
 			>
 				<Box />
@@ -538,6 +572,7 @@
 				onclick={() => {
 					action = 'circle';
 					canvas.style.cursor = 'auto';
+					selectedShape = null;
 				}}
 			>
 				<Circle />
@@ -550,6 +585,7 @@
 				onclick={() => {
 					action = 'text';
 					canvas.style.cursor = 'text';
+					selectedShape = null;
 				}}
 			>
 				<Text />
@@ -596,7 +632,7 @@
 		<div class="variant-glass arrow"></div>
 	</div>
 	<div class="max-w-30 card absolute left-4 top-10 translate-y-1/2 rounded bg-zinc-100 text-sm">
-		{#if action === 'rect' || action === 'circle'}
+		{#if action === 'rect' || action === 'circle' || action === 'select'}
 			<section class="p-4">
 				<div class="flex flex-row items-center justify-start gap-1">
 					<ColorWheel color="green" />
