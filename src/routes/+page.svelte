@@ -10,8 +10,11 @@
 		Image,
 		BorderSolid,
 		BorderDotted,
+		BorderDashed,
+		BorderStyle,
 		Text,
 		InfoCircled,
+		CornerTopLeft,
 		FontBold,
 		FontItalic,
 		FontSize,
@@ -20,10 +23,10 @@
 		BlendingMode,
 		Pencil1,
 		MagicWand,
-		PaperPlane
+		PaperPlane,
+		CursorArrow
 	} from 'svelte-radix';
 	import type { ModalSettings, PopupSettings } from '@skeletonlabs/skeleton';
-	import { fade, slide } from 'svelte/transition';
 
 	const modalStore = getModalStore();
 
@@ -33,7 +36,8 @@
 	let action = $state('rect');
 	let stroke = $state('black');
 	let lineWidth = $state(1);
-	let lineType = $state('dashed');
+	let lineType = $state('solid');
+	let borderRadius = $state(0);
 	let shouldFillPolygon = $state(false);
 	let isDown = $state(false);
 
@@ -76,14 +80,37 @@
 	});
 
 	function getLineDash(linetype: string) {
-		return linetype === 'dashed' ? [] : [4, 4];
+		if (linetype === 'solid') {
+			return [];
+		} else if (linetype === 'dotted') {
+			return [2, 2];
+		} else if (linetype === 'dashed') {
+			return [6, 6];
+		}
+
+		return [];
 	}
 
-	function drawRect(startX: number, startY: number, w: number, h: number, fill: boolean = false) {
+	function makeBorderRadius(border_rad: number) {
+		const border_rad_squared = border_rad;
+		return [border_rad_squared, border_rad_squared, border_rad_squared, border_rad_squared];
+	}
+
+	function drawRect(
+		startX: number,
+		startY: number,
+		w: number,
+		h: number,
+		fill: boolean = false,
+		border_rad: number
+	) {
+		ctx.beginPath();
+		ctx.roundRect(startX, startY, w, h, makeBorderRadius(border_rad));
+		ctx.closePath();
 		if (fill) {
-			ctx.fillRect(startX, startY, w, h);
+			ctx.fill();
 		} else {
-			ctx.strokeRect(startX, startY, w, h);
+			ctx.stroke();
 		}
 	}
 
@@ -121,7 +148,7 @@
 				// for object shape
 				switch (obj.shape) {
 					case 'rect':
-						drawRect(obj.startX, obj.startY, obj.width, obj.height, obj.fill);
+						drawRect(obj.startX, obj.startY, obj.width, obj.height, obj.fill, obj.borderradius);
 						break;
 					case 'circle':
 						drawOval(obj.startX, obj.startY, obj.endX, obj.endY, obj.fill);
@@ -140,11 +167,14 @@
 				let width = prevX - startX;
 				let height = prevY - startY;
 				console.log(`Rect dims: ${startX},${startY},${width},${height}`);
-				if (shouldFillPolygon) {
-					ctx.fillRect(startX - viewportTransform.x, startY - viewportTransform.y, width, height);
-				} else {
-					ctx.strokeRect(startX - viewportTransform.x, startY - viewportTransform.y, width, height);
-				}
+				drawRect(
+					startX - viewportTransform.x,
+					startY - viewportTransform.y,
+					width,
+					height,
+					shouldFillPolygon,
+					borderRadius
+				);
 			} else if (action === 'circle' && isDown) {
 				drawOval(
 					startX - viewportTransform.x,
@@ -228,7 +258,7 @@
 					y: prevY - viewportTransform.y,
 					width: ctx.measureText(text),
 					stroke: stroke,
-					timestamp: new Date(),
+					timestamp: Date.now() + Math.random(),
 					fontSettings: `${isTextBold ? 'bold' : ''} ${isTextItalic ? 'italic' : ''} ${fontSize}px sans-serif`,
 					shape: 'text'
 				};
@@ -257,11 +287,12 @@
 					startY: startY - viewportTransform.y,
 					width: prevX - startX,
 					height: prevY - startY,
-					timestamp: new Date(),
+					timestamp: Date.now() + Math.random(),
 					stroke: stroke,
 					linewidth: lineWidth,
 					linetype: lineType,
 					fill: shouldFillPolygon,
+					borderradius: borderRadius,
 					shape: 'rect'
 				};
 				objectStore.push(currentObject);
@@ -272,7 +303,7 @@
 					startY: startY - viewportTransform.y,
 					endX: prevX - viewportTransform.x,
 					endY: prevY - viewportTransform.y,
-					timestamp: new Date(),
+					timestamp: Date.now() + Math.random(),
 					stroke: stroke,
 					linewidth: lineWidth,
 					linetype: lineType,
@@ -424,6 +455,18 @@
 				<span>Pan</span>
 			</button>
 			<button
+				class="{action === 'select'
+					? 'variant-ghost-success font-semibold'
+					: 'variant-soft'} chip hover:variant-ghost-success"
+				onclick={() => {
+					action = 'select';
+					canvas.style.cursor = 'auto';
+				}}
+			>
+				<CursorArrow />
+				<span>Select</span>
+			</button>
+			<button
 				class="{action === 'rect'
 					? 'variant-ghost-success font-semibold'
 					: 'variant-soft'} chip hover:variant-ghost-success"
@@ -519,16 +562,16 @@
 			</section>
 			<section class="p-4">
 				<div class="flex flex-row items-center justify-start gap-1">
-					<Pencil1 color="black" />
-					<h3 class="italic">Line Type</h3>
+					<BorderStyle color="black" />
+					<h3>Line Type</h3>
 				</div>
 				<div class="flex flex-row gap-1 py-1">
 					<button
-						class="{lineType === 'dashed'
+						class="{lineType === 'solid'
 							? 'variant-ghost-success font-semibold'
 							: 'variant-soft'} chip hover:variant-ghost-success"
 						onclick={() => {
-							lineType = 'dashed';
+							lineType = 'solid';
 						}}
 					>
 						<BorderSolid />
@@ -543,7 +586,26 @@
 					>
 						<BorderDotted />
 					</button>
+					<button
+						class="{lineType === 'dashed'
+							? 'variant-ghost-success font-semibold'
+							: 'variant-soft'} chip hover:variant-ghost-success"
+						onclick={() => {
+							lineType = 'dashed';
+						}}
+					>
+						<BorderDashed />
+					</button>
 				</div>
+			</section>
+			<section class="p-4">
+				<RangeSlider name="fontsize-slider" bind:value={borderRadius} max={50} min={0} step={1}>
+					<div class="flex items-center justify-between">
+						<CornerTopLeft color="blue" />
+						<div>Border Radius</div>
+						<div class="text-xs">{borderRadius}</div>
+					</div>
+				</RangeSlider>
 			</section>
 			<section class="p-4">
 				<div class="flex flex-row items-center justify-start gap-1">
